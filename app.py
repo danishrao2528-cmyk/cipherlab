@@ -1,9 +1,5 @@
-import io
-import math
-import wave
 import base64
 import hashlib
-import numpy as np
 import streamlit as st
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
@@ -254,73 +250,6 @@ def sha256_hash(text: str) -> str:
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 # -----------------------------------------------------------------------------
-# Audio Synthesis for Drum Machine
-# -----------------------------------------------------------------------------
-def synthesize_drum_track(pattern, bpm=120, sample_rate=44100):
-    step_duration = (60.0 / bpm) / 4.0
-    step_samples = int(sample_rate * step_duration)
-    total_samples = step_samples * 16
-    mix = np.zeros(total_samples, dtype=np.float32)
-
-    def get_kick():
-        dur = min(0.2, step_duration * 2)
-        n = int(sample_rate * dur)
-        t = np.linspace(0, dur, n, False)
-        freq = 150.0 * np.exp(-t * 30.0) + 40.0
-        phase = 2.0 * np.pi * np.cumsum(freq) / sample_rate
-        env = np.exp(-t * 18.0)
-        return 0.9 * np.sin(phase) * env
-
-    def get_snare():
-        dur = min(0.18, step_duration * 2)
-        n = int(sample_rate * dur)
-        t = np.linspace(0, dur, n, False)
-        tone = np.sin(2.0 * np.pi * 180.0 * t) * np.exp(-t * 28.0)
-        noise = np.random.uniform(-1.0, 1.0, n) * np.exp(-t * 20.0)
-        return 0.4 * tone + 0.5 * noise
-
-    def get_hihat():
-        dur = min(0.06, step_duration)
-        n = int(sample_rate * dur)
-        t = np.linspace(0, dur, n, False)
-        noise = np.random.uniform(-1.0, 1.0, n) * np.exp(-t * 70.0)
-        return 0.5 * noise
-
-    def get_clap():
-        dur = min(0.2, step_duration * 2)
-        n = int(sample_rate * dur)
-        t = np.linspace(0, dur, n, False)
-        noise = np.random.uniform(-1.0, 1.0, n)
-        env = (np.exp(-t * 35.0) +
-               0.6 * np.exp(-np.maximum(0.0, t - 0.012) * 40.0) +
-               0.8 * np.exp(-np.maximum(0.0, t - 0.024) * 45.0))
-        return 0.6 * noise * env
-
-    generators = {"Kick": get_kick, "Snare": get_snare, "Hi-Hat": get_hihat, "Clap": get_clap}
-
-    for drum_name, steps in pattern.items():
-        sound = generators[drum_name]()
-        sound_len = len(sound)
-        for i, active in enumerate(steps):
-            if active:
-                idx = i * step_samples
-                end_idx = min(idx + sound_len, total_samples)
-                mix[idx:end_idx] += sound[:end_idx - idx]
-
-    max_val = np.max(np.abs(mix))
-    if max_val > 0:
-        mix = (mix / max_val) * 0.95
-
-    pcm16 = (mix * 32767).astype(np.int16)
-    wav_io = io.BytesIO()
-    with wave.open(wav_io, 'wb') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm16.tobytes())
-    return wav_io.getvalue()
-
-# -----------------------------------------------------------------------------
 # Main Application UI
 # -----------------------------------------------------------------------------
 
@@ -503,74 +432,6 @@ with st.container(border=True):
             out_badge.warning("AWAITING INPUT")
             st.caption("Your result will appear here...")
 
-# -----------------------------------------------------------------------------
-# Studio Drum Machine (Synthesized 16-Step Sequencer)
-# -----------------------------------------------------------------------------
-st.write("---")
-with st.expander("🎹 Studio Drum Machine (Synthesized 16-Step Sequencer)", expanded=False):
-    st.write("Program rhythm beats synthesized in real-time entirely in Python. Use presets or build custom patterns.")
-
-    col_tempo, col_preset, col_render = st.columns([2, 3, 2])
-    with col_tempo:
-        tempo = st.slider("BPM (Tempo)", min_value=60, max_value=180, value=120, step=4)
-    with col_preset:
-        preset_choice = st.selectbox(
-            "Select Beat Preset:",
-            options=["Custom", "Classic House (Four-on-the-Floor)", "Hip-Hop Boom-Bap", "Electro Syncopation"]
-        )
-
-    instruments = ["Kick", "Snare", "Hi-Hat", "Clap"]
-    default_patterns = {
-        "Custom": {
-            "Kick":   [True, False, False, False, True, False, False, False, True, False, False, False, True, False, False, False],
-            "Snare":  [False, False, False, False, True, False, False, False, False, False, False, False, True, False, False, False],
-            "Hi-Hat": [True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False],
-            "Clap":   [False, False, False, False, False, False, False, False, False, False, False, False, True, False, False, False]
-        },
-        "Classic House (Four-on-the-Floor)": {
-            "Kick":   [True, False, False, False, True, False, False, False, True, False, False, False, True, False, False, False],
-            "Snare":  [False, False, False, False, True, False, False, False, False, False, False, False, True, False, False, False],
-            "Hi-Hat": [False, False, True, False, False, False, True, False, False, False, True, False, False, False, True, False],
-            "Clap":   [False, False, False, False, True, False, False, False, False, False, False, False, True, False, False, False]
-        },
-        "Hip-Hop Boom-Bap": {
-            "Kick":   [True, False, False, True, False, False, False, False, False, True, True, False, False, False, False, False],
-            "Snare":  [False, False, False, False, True, False, False, False, False, False, False, False, True, False, False, False],
-            "Hi-Hat": [True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True],
-            "Clap":   [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, True]
-        },
-        "Electro Syncopation": {
-            "Kick":   [True, False, False, False, False, False, True, False, False, False, True, False, False, True, False, False],
-            "Snare":  [False, False, False, False, True, False, False, False, False, False, False, False, True, False, False, True],
-            "Hi-Hat": [True, False, True, True, False, True, True, False, True, False, True, True, False, True, True, False],
-            "Clap":   [False, False, False, False, True, False, False, True, False, False, False, False, True, False, False, False]
-        }
-    }
-
-    if "last_preset" not in st.session_state or st.session_state.last_preset != preset_choice:
-        st.session_state.last_preset = preset_choice
-        for inst in instruments:
-            for s in range(16):
-                st.session_state[f"seq_{inst}_{s}"] = default_patterns[preset_choice][inst][s]
-
-    st.write("**16-Step Pattern Grid**")
-    current_pattern = {}
-    for inst in instruments:
-        st.caption(f"**{inst}**")
-        step_cols = st.columns(16)
-        inst_steps = []
-        for s in range(16):
-            with step_cols[s]:
-                checked = st.checkbox(f"{s+1}", key=f"seq_{inst}_{s}", label_visibility="collapsed")
-                inst_steps.append(checked)
-        current_pattern[inst] = inst_steps
-
-    st.write("")
-    with col_render:
-        if st.button("Synthesize & Play Loop", type="primary", use_container_width=True):
-            audio_wav = synthesize_drum_track(current_pattern, bpm=int(tempo))
-            st.audio(audio_wav, format="audio/wav")
-            st.caption(f"Synthesized 16-step beat at {tempo} BPM.")
 
 # -----------------------------------------------------------------------------
 # Educational Footnotes
@@ -597,4 +458,4 @@ with f4:
         st.write("The modern gold standard. Combines a 256-bit passphrase-derived key with a fresh nonce for secure, authenticated military-grade encryption.")
 
 st.write("")
-st.caption("© CipherLab · Educational cryptography & audio synthesis workspace · Built natively with Python & Streamlit")
+st.caption("© CipherLab · Educational cryptography workspace · Built natively with Python & Streamlit")
